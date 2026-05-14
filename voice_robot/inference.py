@@ -16,9 +16,10 @@ from preprocess import (TASA_MUESTREO, MUESTRAS_OBJETIVO,
                         segmentar_audio)
 from arduino_comm import ComunicadorArduino
 
-DIR_MODELOS     = "models"
-RUTA_MODELO_CNN = os.path.join(DIR_MODELOS, "modelo_cnn_comandos.h5")
-RUTA_CONFIG_CNN = os.path.join(DIR_MODELOS, "config_cnn.json")
+DIR_MODELOS       = "models"
+RUTA_MODELO_TFLITE = os.path.join(DIR_MODELOS, "modelo_cnn_comandos.tflite")
+RUTA_MODELO_H5    = os.path.join(DIR_MODELOS, "modelo_cnn_comandos.h5")
+RUTA_CONFIG_CNN   = os.path.join(DIR_MODELOS, "config_cnn.json")
 
 # 1024 muestras por bloque -> ~64ms por callback a 16kHz
 TAMANO_BLOQUE = 1024
@@ -39,33 +40,41 @@ def _cargar_configuracion():
 
 
 def _cargar_modelo():
-    # Retorna el modelo Keras o None si no existe (activa modo demostracion)
-    if not os.path.exists(RUTA_MODELO_CNN):
-        print(f"\n  ADVERTENCIA: modelo no encontrado en '{RUTA_MODELO_CNN}'")
-        print("  Entrena el modelo con: python train.py")
-        print("  Sistema en MODO DEMOSTRACION (predicciones aleatorias).\n")
-        return None
+    # Prefiere TFLite (menos RAM, ideal para Raspberry Pi); cae a .h5 si no existe.
+    # Retorna (backend, objeto) donde backend es "tflite", "keras" o None.
+    import tensorflow as tf
 
-    try:
-        import tensorflow as tf
-        print(f"  Cargando modelo: {RUTA_MODELO_CNN}", end="", flush=True)
-        modelo     = tf.keras.models.load_model(RUTA_MODELO_CNN)
-        parametros = modelo.count_params()
-        print(f"  OK ({parametros:,} parametros)")
-        return modelo
-    except Exception as e:
-        print(f"\n  Error al cargar el modelo: {e}")
-        print("  Sistema en MODO DEMOSTRACION.")
-        return None
+    if os.path.exists(RUTA_MODELO_TFLITE):
+        try:
+            print(f"  Cargando TFLite: {RUTA_MODELO_TFLITE}", end="", flush=True)
+            interprete = tf.lite.Interpreter(model_path=RUTA_MODELO_TFLITE)
+            interprete.allocate_tensors()
+            print("  OK")
+            return "tflite", interprete
+        except Exception as e:
+            print(f"\n  Error TFLite: {e}. Intentando con .h5...")
+
+    if os.path.exists(RUTA_MODELO_H5):
+        try:
+            print(f"  Cargando Keras: {RUTA_MODELO_H5}", end="", flush=True)
+            modelo = tf.keras.models.load_model(RUTA_MODELO_H5)
+            print(f"  OK ({modelo.count_params():,} parametros)")
+            return "keras", modelo
+        except Exception as e:
+            print(f"\n  Error al cargar el modelo: {e}")
+
+    print("\n  ADVERTENCIA: no se encontro ningun modelo en 'models/'")
+    print("  Sistema en MODO DEMOSTRACION (predicciones aleatorias).\n")
+    return None, None
 
 
 class InferenciaVozRobot:
 
     def __init__(self, puerto_arduino=None):
-        self._config  = _cargar_configuracion()
-        self._clases  = self._config.get("clases", CLASES_DEFAULT)
-        self._modelo  = _cargar_modelo()
-        self._arduino = ComunicadorArduino(puerto=puerto_arduino)
+        self._config   = _cargar_configuracion()
+        self._clases   = self._config.get("clases", CLASES_DEFAULT)
+        self._backend, self._modelo = _cargar_modelo()
+        self._arduino  = ComunicadorArduino(puerto=puerto_arduino)
 
         self._buffer           = np.zeros(MUESTRAS_OBJETIVO, dtype=np.float32)
         self._cola_audio       = queue.Queue(maxsize=50)
@@ -104,8 +113,17 @@ class InferenciaVozRobot:
             idx  = random.randint(0, len(self._clases) - 1)
             conf = random.uniform(0.60, 0.98)
             return self._clases[idx], conf
-        probs = self._modelo.predict(entrada, verbose=0)[0]
-        idx   = int(np.argmax(probs))
+
+        if self._backend == "tflite":
+            det_entrada  = self._modelo.get_input_details()
+            det_salida   = self._modelo.get_output_details()
+            self._modelo.set_tensor(det_entrada[0]["index"], entrada)
+            self._modelo.invoke()
+            probs = self._modelo.get_tensor(det_salida[0]["index"])[0]
+        else:
+            probs = self._modelo.predict(entrada, verbose=0)[0]
+
+        idx = int(np.argmax(probs))
         return self._clases[idx], float(probs[idx])
 
     def _actuar(self, clase, confianza):
@@ -127,7 +145,8 @@ class InferenciaVozRobot:
         print(f"  Clases       : {', '.join(self._clases)}")
         print(f"  Umbral conf. : {UMBRAL_CONFIANZA:.0%}")
         print(f"  Cooldown     : {COOLDOWN_SEGUNDOS} s")
-        print(f"  Modelo       : {'Cargado' if self._modelo else 'DEMOSTRACION'}")
+        backend_str = {"tflite": "TFLite (optimizado)", "keras": "Keras .h5"}.get(self._backend, "DEMOSTRACION")
+        print(f"  Modelo       : {backend_str}")
         print(f"  Arduino      : {'Conectado' if self._arduino.conectado else 'Simulacion'}")
         print("\n  Habla un comando. Ctrl+C para salir.")
         print("-" * 55)

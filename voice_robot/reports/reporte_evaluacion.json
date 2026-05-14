@@ -1,0 +1,32 @@
+{
+  "cnn": {
+    "etiqueta": "CNN Comandos Simples",
+    "muestras": 874,
+    "accuracy": 0.914187643020595,
+    "precision_macro": 0.9139158400206194,
+    "recall_macro": 0.9123407304132295,
+    "f1_macro": 0.9128017889610994,
+    "latencia_ms_muestra": 0.7175227688786318
+  },
+  "latencia": {
+    "preprocesamiento_ms": {
+      "promedio": 58.97275600001194,
+      "mediana": 5.973199999971257,
+      "maximo": 5270.339400000012,
+      "minimo": 5.405000000337168
+    },
+    "inferencia_ms": {
+      "promedio": 94.37622599999486,
+      "mediana": 89.23700000013923,
+      "maximo": 240.4636000001119,
+      "minimo": 82.78940000036528
+    },
+    "total_pipeline_ms": {
+      "promedio": 153.3489820000068,
+      "mediana": 95.87430000033237,
+      "maximo": 5510.803000000124,
+      "minimo": 88.72960000007879
+    },
+    "n_repeticiones": 100
+  }
+}

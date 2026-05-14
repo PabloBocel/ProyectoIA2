@@ -1,0 +1,18 @@
+{
+  "clases": [
+    "AVANZA",
+    "RETROCEDE",
+    "IZQUIERDA",
+    "DERECHA",
+    "DETENTE",
+    "RUIDO_FONDO"
+  ],
+  "n_mfcc": 40,
+  "tasa_muestreo": 16000,
+  "forma_entrada": [
+    101,
+    40
+  ],
+  "epocas_reales": 34,
+  "val_accuracy": 0.9164759516716003
+}
