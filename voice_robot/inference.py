@@ -16,7 +16,8 @@ from preprocess import (TASA_MUESTREO, MUESTRAS_OBJETIVO,
                         segmentar_audio)
 from arduino_comm import ComunicadorArduino
 
-DIR_MODELOS       = "models"
+_DIR_SCRIPT       = os.path.dirname(os.path.abspath(__file__))
+DIR_MODELOS       = os.path.join(_DIR_SCRIPT, "models")
 RUTA_MODELO_TFLITE = os.path.join(DIR_MODELOS, "modelo_cnn_comandos.tflite")
 RUTA_MODELO_H5    = os.path.join(DIR_MODELOS, "modelo_cnn_comandos.h5")
 RUTA_CONFIG_CNN   = os.path.join(DIR_MODELOS, "config_cnn.json")
@@ -26,7 +27,7 @@ TAMANO_BLOQUE = 1024
 
 DURACION_VENTANA  = MUESTRAS_OBJETIVO / TASA_MUESTREO   # 1.0 segundo
 UMBRAL_CONFIANZA  = 0.75
-FRACCION_VOZ_MINIMA = 0.30
+FRACCION_VOZ_MINIMA = 0.55
 COOLDOWN_SEGUNDOS = 1.0
 
 CLASES_DEFAULT = ["AVANZA", "RETROCEDE", "IZQUIERDA", "DERECHA", "DETENTE", "RUIDO_FONDO"]

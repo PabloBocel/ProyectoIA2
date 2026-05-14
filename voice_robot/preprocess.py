@@ -22,7 +22,7 @@ N_MELS     = 128
 
 # Parametros VAD
 # El habla tiene energia RMS alta y ZCR bajo; el ruido blanco tiene ZCR alto
-UMBRAL_ENERGIA    = 0.002
+UMBRAL_ENERGIA    = 0.008
 UMBRAL_ZCR        = 0.30
 LONGITUD_MARCO_VAD = 512
 

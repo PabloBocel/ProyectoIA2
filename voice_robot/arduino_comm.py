@@ -44,7 +44,7 @@ def detectar_puerto_arduino():
         if any(kw in info for kw in palabras_clave):
             return puerto.device
 
-    return puertos[0].device if puertos else None
+    return None
 
 
 class ComunicadorArduino:
@@ -69,20 +69,26 @@ class ComunicadorArduino:
             self._activar_simulacion("no se detecto ningun Arduino")
             return
 
-        try:
-            self.conexion = serial.Serial(
-                port=self._puerto_nombre,
-                baudrate=self.baudios,
-                timeout=TIEMPO_ESPERA_S,
-                write_timeout=TIEMPO_ESPERA_S
-            )
-            # El Arduino reinicia al abrir el puerto; esperar a que termine el setup()
-            time.sleep(2.0)
-            print(f"Arduino conectado en {self._puerto_nombre} a {self.baudios} bps")
-            self.modo_simulacion = False
+        ultimo_error = None
+        for intento in range(3):
+            try:
+                self.conexion = serial.Serial(
+                    port=self._puerto_nombre,
+                    baudrate=self.baudios,
+                    timeout=TIEMPO_ESPERA_S,
+                )
+                # El Arduino reinicia al abrir el puerto; esperar a que termine el setup()
+                time.sleep(2.0)
+                print(f"Arduino conectado en {self._puerto_nombre} a {self.baudios} bps")
+                self.modo_simulacion = False
+                return
+            except serial.SerialException as e:
+                ultimo_error = e
+                if intento < 2:
+                    print(f"  Puerto ocupado, reintentando ({intento + 1}/3)...")
+                    time.sleep(2.0)
 
-        except serial.SerialException as e:
-            self._activar_simulacion(str(e))
+        self._activar_simulacion(str(ultimo_error))
 
     def _activar_simulacion(self, razon):
         self.modo_simulacion = True
