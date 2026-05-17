@@ -14,7 +14,7 @@ except ImportError:
     SERIAL_DISPONIBLE = False
     print("pyserial no instalado. Instala con: pip install pyserial")
 
-VELOCIDAD_BAUDIOS = 9600
+VELOCIDAD_BAUDIOS = 115200
 TIEMPO_ESPERA_S   = 1.0
 RETARDO_POST_CMD  = 0.05
 
@@ -42,6 +42,11 @@ def detectar_puerto_arduino():
     for puerto in puertos:
         info = f"{puerto.description} {puerto.manufacturer or ''}"
         if any(kw in info for kw in palabras_clave):
+            return puerto.device
+
+    # Fallback: usar primer ttyUSB o ttyACM disponible
+    for puerto in puertos:
+        if "ttyUSB" in puerto.device or "ttyACM" in puerto.device:
             return puerto.device
 
     return None
@@ -78,7 +83,7 @@ class ComunicadorArduino:
                     timeout=TIEMPO_ESPERA_S,
                 )
                 # El Arduino reinicia al abrir el puerto; esperar a que termine el setup()
-                time.sleep(2.0)
+                time.sleep(4.0)
                 print(f"Arduino conectado en {self._puerto_nombre} a {self.baudios} bps")
                 self.modo_simulacion = False
                 return
@@ -109,9 +114,10 @@ class ComunicadorArduino:
 
         with self._lock:
             try:
+                self.conexion.reset_input_buffer()
                 self.conexion.write(payload.encode("utf-8"))
                 self.conexion.flush()
-                time.sleep(RETARDO_POST_CMD)
+                print(f"  [SERIAL] Enviado: {repr(payload)}")
                 return True
 
             except serial.SerialException as e:

@@ -4,8 +4,35 @@
 # Uso: python preprocess.py <ruta_audio.wav>
 
 import numpy as np
-import librosa
 import os
+import sys
+from types import ModuleType
+
+# Simular dependencias opcionales de librosa no disponibles en ARM 32-bit
+try:
+    import numba
+except ImportError:
+    def _jit(*args, **kwargs):
+        if args and callable(args[0]):
+            return args[0]
+        return lambda f: f
+    _numba = ModuleType('numba')
+    _numba.jit = _jit
+    _numba.njit = _jit
+    _numba.stencil = _jit
+    _numba.guvectorize = _jit
+    _numba.vectorize = _jit
+    _numba.prange = range
+    sys.modules['numba'] = _numba
+    sys.modules['numba.core'] = ModuleType('numba.core')
+    sys.modules['numba.core.types'] = ModuleType('numba.core.types')
+
+try:
+    import soxr
+except (ImportError, OSError):
+    sys.modules['soxr'] = ModuleType('soxr')
+
+import librosa
 
 # Parametros de audio
 TASA_MUESTREO    = 16000

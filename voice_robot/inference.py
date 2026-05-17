@@ -28,7 +28,7 @@ TAMANO_BLOQUE = 1024
 DURACION_VENTANA  = MUESTRAS_OBJETIVO / TASA_MUESTREO   # 1.0 segundo
 UMBRAL_CONFIANZA  = 0.75
 FRACCION_VOZ_MINIMA = 0.55
-COOLDOWN_SEGUNDOS = 1.0
+COOLDOWN_SEGUNDOS = 2.0
 
 CLASES_DEFAULT = ["AVANZA", "RETROCEDE", "IZQUIERDA", "DERECHA", "DETENTE", "RUIDO_FONDO"]
 
@@ -41,28 +41,34 @@ def _cargar_configuracion():
 
 
 def _cargar_modelo():
-    # Prefiere TFLite (menos RAM, ideal para Raspberry Pi); cae a .h5 si no existe.
-    # Retorna (backend, objeto) donde backend es "tflite", "keras" o None.
-    import tensorflow as tf
-
+    # 1. Intenta TFLite con tflite_runtime o tensorflow
     if os.path.exists(RUTA_MODELO_TFLITE):
         try:
+            try:
+                from tflite_runtime.interpreter import Interpreter
+            except ImportError:
+                try:
+                    from ai_edge_litert.interpreter import Interpreter
+                except ImportError:
+                    import tensorflow as tf
+                    Interpreter = tf.lite.Interpreter
+
             print(f"  Cargando TFLite: {RUTA_MODELO_TFLITE}", end="", flush=True)
-            interprete = tf.lite.Interpreter(model_path=RUTA_MODELO_TFLITE)
+            interprete = Interpreter(model_path=RUTA_MODELO_TFLITE)
             interprete.allocate_tensors()
             print("  OK")
             return "tflite", interprete
         except Exception as e:
-            print(f"\n  Error TFLite: {e}. Intentando con .h5...")
+            print(f"\n  Error TFLite: {e}. Intentando con numpy...")
 
+    # 2. Carga el .h5 con numpy puro (sin tensorflow)
     if os.path.exists(RUTA_MODELO_H5):
         try:
-            print(f"  Cargando Keras: {RUTA_MODELO_H5}", end="", flush=True)
-            modelo = tf.keras.models.load_model(RUTA_MODELO_H5)
-            print(f"  OK ({modelo.count_params():,} parametros)")
-            return "keras", modelo
+            from numpy_model import ModeloCNN
+            modelo = ModeloCNN(RUTA_MODELO_H5)
+            return "numpy", modelo
         except Exception as e:
-            print(f"\n  Error al cargar el modelo: {e}")
+            print(f"\n  Error al cargar modelo numpy: {e}")
 
     print("\n  ADVERTENCIA: no se encontro ningun modelo en 'models/'")
     print("  Sistema en MODO DEMOSTRACION (predicciones aleatorias).\n")
@@ -121,6 +127,8 @@ class InferenciaVozRobot:
             self._modelo.set_tensor(det_entrada[0]["index"], entrada)
             self._modelo.invoke()
             probs = self._modelo.get_tensor(det_salida[0]["index"])[0]
+        elif self._backend == "numpy":
+            probs = self._modelo.predecir(entrada)
         else:
             probs = self._modelo.predict(entrada, verbose=0)[0]
 
@@ -129,7 +137,8 @@ class InferenciaVozRobot:
 
     def _actuar(self, clase, confianza):
         ahora = time.time()
-        if confianza < UMBRAL_CONFIANZA:
+        umbral = 0.95 if clase == "DETENTE" else UMBRAL_CONFIANZA
+        if confianza < umbral:
             return
         if ahora - self._tiempo_ultimo_cmd < COOLDOWN_SEGUNDOS:
             return
@@ -146,7 +155,7 @@ class InferenciaVozRobot:
         print(f"  Clases       : {', '.join(self._clases)}")
         print(f"  Umbral conf. : {UMBRAL_CONFIANZA:.0%}")
         print(f"  Cooldown     : {COOLDOWN_SEGUNDOS} s")
-        backend_str = {"tflite": "TFLite (optimizado)", "keras": "Keras .h5"}.get(self._backend, "DEMOSTRACION")
+        backend_str = {"tflite": "TFLite (optimizado)", "keras": "Keras .h5", "numpy": "Numpy (sin tensorflow)"}.get(self._backend, "DEMOSTRACION")
         print(f"  Modelo       : {backend_str}")
         print(f"  Arduino      : {'Conectado' if self._arduino.conectado else 'Simulacion'}")
         print("\n  Habla un comando. Ctrl+C para salir.")
